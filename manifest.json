@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "dアニメストア ニコニコ実況風コメントリプレイ",
+  "version": "1.0.0",
+  "description": "dアニメストアの動画再生画面に、ニコニコ実況の過去ログコメントを重ねて表示します。",
+  "permissions": ["storage", "declarativeNetRequest"],
+  "host_permissions": [
+    "https://animestore.docomo.ne.jp/*",
+    "https://jk.nicovideo.jp/*"
+  ],
+  "action": {
+    "default_popup": "index.html"
+  },
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://animestore.docomo.ne.jp/animestore/sc_d_pc*"],
+      "js": ["dist/content.js"],
+      "css": ["src/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/styles.css"],
+      "matches": ["https://animestore.docomo.ne.jp/*"]
+    }
+  ]
+}
