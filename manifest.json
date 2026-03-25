@@ -9,7 +9,7 @@
     "https://jk.nicovideo.jp/*"
   ],
   "action": {
-    "default_popup": "index.html"
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "dist/background.js",
@@ -19,13 +19,13 @@
     {
       "matches": ["https://animestore.docomo.ne.jp/animestore/sc_d_pc*"],
       "js": ["dist/content.js"],
-      "css": ["src/styles.css"],
+      "css": ["styles.css"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": ["src/styles.css"],
+      "resources": ["styles.css"],
       "matches": ["https://animestore.docomo.ne.jp/*"]
     }
   ]
