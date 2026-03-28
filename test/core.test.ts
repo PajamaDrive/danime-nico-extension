@@ -9,7 +9,9 @@ describe('core', () => {
   });
 
   it('extractThreadKey: 見つからない場合はエラーを発生させること', () => {
-    expect(() => extractThreadKey('<html>no key here</html>')).toThrow(/threadKey が見つかりません/);
+    expect(() => extractThreadKey('<html>no key here</html>')).toThrow(
+      /threadKey が見つかりません/,
+    );
   });
 
   it('extractThreadTargets: ownerとmainのフォークを正しく抽出できること', () => {

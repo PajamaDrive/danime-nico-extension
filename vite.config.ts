@@ -14,17 +14,17 @@ export default defineConfig({
       input: {
         background: resolve(__dirname, 'src/background.ts'),
         popup: resolve(__dirname, 'src/popup.ts'),
-        'popup.html': resolve(__dirname, 'popup.html')
+        'popup.html': resolve(__dirname, 'popup.html'),
       },
       output: {
         format: 'es',
         entryFileNames: '[name].js',
         chunkFileNames: 'chunks/[name]-[hash].js',
-        assetFileNames: 'assets/[name].[ext]'
-      }
-    }
+        assetFileNames: 'assets/[name].[ext]',
+      },
+    },
   },
   test: {
-    environment: 'happy-dom'
-  }
+    environment: 'happy-dom',
+  },
 });
