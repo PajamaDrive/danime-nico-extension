@@ -44,6 +44,39 @@ export function extractThreadTargets(html: string): ThreadTarget[] {
   return targets;
 }
 
+export function extractVideoId(input: string): string | null {
+  const match = input.match(/(?:sm|so|nm)\d+/);
+  return match ? match[0] : null;
+}
+
+export function parseNicoCommentResponse(commentData: {
+  data?: {
+    threads?: {
+      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
+    }[];
+  };
+}): NicoComment[] {
+  const comments: NicoComment[] = [];
+
+  (commentData?.data?.threads || []).forEach(
+    (thread: {
+      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
+    }) => {
+      (thread.comments || []).forEach(
+        (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
+          comments.push({
+            vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
+            body: c.body,
+            commands: c.commands || [],
+          });
+        },
+      );
+    },
+  );
+
+  return comments.sort((a, b) => a.vposMs - b.vposMs);
+}
+
 export interface CommentStyle {
   color: string;
   size: string;

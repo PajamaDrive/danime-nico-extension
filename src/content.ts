@@ -1,4 +1,4 @@
-import { parseCommentCommands, CommentStyle, NicoComment } from './core';
+import { parseCommentCommands, CommentStyle, NicoComment, extractVideoId } from './core';
 
 let comments: NicoComment[] = [];
 let overlay: HTMLElement | null = null;
@@ -145,8 +145,8 @@ function createControlPanel() {
 
   btn.addEventListener('click', () => {
     const val = input.value.trim();
-    const match = val.match(/(?:sm|so|nm)\d+/);
-    if (!match) {
+    const videoId = extractVideoId(val);
+    if (!videoId) {
       msg.textContent = '無効なURL/ID';
       return;
     }
@@ -154,7 +154,7 @@ function createControlPanel() {
     chrome.runtime.sendMessage(
       {
         type: 'FETCH_AND_SEND',
-        videoId: match[0],
+        videoId: videoId,
       },
       (res) => {
         if (res && res.success) {

@@ -1,5 +1,11 @@
 import { expect, it, describe } from 'vitest';
-import { extractThreadKey, extractThreadTargets, parseCommentCommands } from '../src/core';
+import {
+  extractThreadKey,
+  extractThreadTargets,
+  parseCommentCommands,
+  extractVideoId,
+  parseNicoCommentResponse,
+} from '../src/core';
 
 describe('core', () => {
   describe('extractThreadKey', () => {
@@ -32,6 +38,51 @@ describe('core', () => {
       const targets = extractThreadTargets(html);
       expect(targets).toHaveLength(3); // owner, main, easy
       expect(targets.map((t) => t.id)).toEqual(['98765', '98765', '98765']);
+    });
+  });
+
+  describe('extractVideoId', () => {
+    it('URLから動画IDを抽出できること', () => {
+      expect(extractVideoId('https://www.nicovideo.jp/watch/sm12345')).toBe('sm12345');
+      expect(extractVideoId('sm12345')).toBe('sm12345');
+      expect(extractVideoId('so67890')).toBe('so67890');
+    });
+
+    it('無効な入力に対して null を返すこと', () => {
+      expect(extractVideoId('https://google.com')).toBeNull();
+      expect(extractVideoId('12345')).toBeNull();
+    });
+  });
+
+  describe('parseNicoCommentResponse', () => {
+    it('コメントサーバーのレスポンスを正しくパースしてソートすること', () => {
+      const mockData = {
+        data: {
+          threads: [
+            {
+              comments: [
+                { vposMs: 2000, body: 'later comment' },
+                { vposMs: 1000, body: 'early comment', commands: ['red'] },
+              ],
+            },
+          ],
+        },
+      };
+      const comments = parseNicoCommentResponse(mockData);
+      expect(comments).toHaveLength(2);
+      expect(comments[0].body).toBe('early comment');
+      expect(comments[0].commands).toEqual(['red']);
+      expect(comments[1].body).toBe('later comment');
+    });
+
+    it('vposMs がない場合は vpos から変換すること', () => {
+      const mockData = {
+        data: {
+          threads: [{ comments: [{ vpos: 100, body: 'old style' }] }],
+        },
+      };
+      const comments = parseNicoCommentResponse(mockData);
+      expect(comments[0].vposMs).toBe(1000);
     });
   });
 
