@@ -3,11 +3,7 @@
   "name": "dアニメ ニコ動コメント拡張",
   "version": "1.0",
   "description": "dアニメストアでニコニコ動画のコメントを流す拡張機能",
-  "permissions": [
-    "storage",
-    "activeTab",
-    "scripting"
-  ],
+  "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": [
     "https://animestore.docomo.ne.jp/*",
     "https://*.nicovideo.jp/*",
@@ -19,15 +15,9 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "*://animestore.docomo.ne.jp/animestore/sc_d_pc*"
-      ],
-      "js": [
-        "dist/content.js"
-      ],
-      "css": [
-        "styles.css"
-      ],
+      "matches": ["*://animestore.docomo.ne.jp/animestore/sc_d_pc*"],
+      "js": ["dist/content.js"],
+      "css": ["styles.css"],
       "run_at": "document_idle"
     }
   ],

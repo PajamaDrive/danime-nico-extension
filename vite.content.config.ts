@@ -12,14 +12,14 @@ export default defineConfig({
     emptyOutDir: false, // ESMのビルド結果を消さないようにfalse
     rollupOptions: {
       input: {
-        content: resolve(__dirname, 'src/content.ts')
+        content: resolve(__dirname, 'src/content.ts'),
       },
       output: {
         format: 'iife',
         entryFileNames: '[name].js',
         name: 'content',
-        inlineDynamicImports: true
-      }
-    }
-  }
+        inlineDynamicImports: true,
+      },
+    },
+  },
 });
