@@ -1,59 +1,73 @@
-export interface NicoComment {
-  id: string;
-  text: string;
-  vpos: number;
-  userId: string;
-  command: CommentCommand;
+export interface ThreadTarget {
+    id: string;
+    fork: 'owner' | 'main' | 'easy' | string;
 }
 
-export interface CommentCommand {
-  color?: string;
-  size?: 'small' | 'medium' | 'big';
-  position?: 'top' | 'bottom' | 'naka';
+export function extractThreadKey(html: string): string {
+    const threadKeyRegex = /&quot;threadKey&quot;:&quot;(eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)&quot;/;
+    const match = html.match(threadKeyRegex);
+    if (!match) {
+        throw new Error("threadKey が見つかりません。ログインが必要な動画か、ページ構造が変わった可能性があります。");
+    }
+    return match[1];
 }
 
-export interface NicoThreadKey {
-  threadId: string;
-  key: string;
-  service: string;
+export function extractThreadTargets(html: string): ThreadTarget[] {
+    const targets: ThreadTarget[] = [];
+    const forkRegex = /&quot;id&quot;:&quot;?(\d+)&quot;?,&quot;fork&quot;:&quot;(owner|main|easy)&quot;/g;
+    let m;
+    while ((m = forkRegex.exec(html)) !== null) {
+        targets.push({ id: m[1], fork: m[2] });
+    }
+
+    if (targets.length === 0) {
+        const singleIdRegex = /&quot;threadIds&quot;:\[&quot;\{&quot;id&quot;:(\d+)/;
+        const singleMatch = html.match(singleIdRegex);
+        if (singleMatch) {
+            const tid = singleMatch[1];
+            targets.push({ id: tid, fork: "owner" });
+            targets.push({ id: tid, fork: "main" });
+            targets.push({ id: tid, fork: "easy" });
+        }
+    }
+    return targets;
 }
 
-export interface NicoSession {
-  recipeId: string;
-  contentId: string;
+export interface CommentStyle {
+    color: string;
+    size: string;
+    textShadow: string | null;
+    position: 'fixed-top' | 'fixed-bottom' | 'scroll';
 }
 
-export function parseCommand(cmdString: string): CommentCommand {
-  const parts = cmdString.split(/\s+/);
-  const command: CommentCommand = {};
-  
-  parts.forEach(part => {
-    // カラー（ざっくり）
-    if (part === 'red') command.color = '#ff0000';
-    else if (part === 'pink') command.color = '#ff8080';
-    else if (part === 'orange') command.color = '#ffc000';
-    else if (part === 'yellow') command.color = '#ffff00';
-    else if (part === 'green') command.color = '#00ff00';
-    else if (part === 'cyan') command.color = '#00ffff';
-    else if (part === 'blue') command.color = '#0000ff';
-    else if (part === 'purple') command.color = '#c000ff';
-    else if (part === 'white') command.color = '#ffffff';
-    
-    // サイズ
-    if (part === 'big') command.size = 'big';
-    else if (part === 'small') command.size = 'small';
-    
-    // 位置
-    if (part === 'ue') command.position = 'top';
-    else if (part === 'shita') command.position = 'bottom';
-  });
-  
-  return command;
-}
+export function parseCommentCommands(commands: string[]): CommentStyle {
+    let color = '#ffffff';
+    let size = '44px';
+    let position: 'fixed-top' | 'fixed-bottom' | 'scroll' = 'scroll';
 
-export function formatVposToTime(vpos: number): string {
-  const totalSeconds = Math.floor(vpos / 100);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const colorsMap: Record<string, string> = {
+        red: '#FF0000', pink: '#FF8080', orange: '#FFC000',
+        yellow: '#FFFF00', green: '#00FF00', cyan: '#00FFFF',
+        blue: '#0000FF', purple: '#C000FF', black: '#000000',
+        white: '#FFFFFF', white2: '#CCCC99', niconicou: '#cc0033',
+        miku: '#00ccff'
+    };
+
+    commands.forEach(cmd => {
+        if (colorsMap[cmd]) color = colorsMap[cmd];
+        else if (cmd.startsWith('#')) color = cmd;
+        
+        if (cmd === 'big') size = '64px';
+        if (cmd === 'small') size = '28px';
+
+        if (cmd === 'ue') position = 'fixed-top';
+        if (cmd === 'shita') position = 'fixed-bottom';
+    });
+
+    let textShadow = null;
+    if (color.toLowerCase() === '#000000' || color === 'black') {
+        textShadow = '1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 0px 1px 0 #fff, 0px -1px 0 #fff, 1px 0px 0 #fff, -1px 0px 0 #fff';
+    }
+
+    return { color, size, textShadow, position };
 }

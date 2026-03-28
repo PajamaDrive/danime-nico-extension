@@ -1,91 +1,176 @@
-import { NicoComment } from './core';
+import { parseCommentCommands, CommentStyle } from './core';
 
-class CommentOverlay {
-  private container: HTMLDivElement;
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private activeComments: { comment: NicoComment, x: number, y: number, width: number }[] = [];
+let comments: any[] = [];
+let overlay: HTMLElement | null = null;
+let videoElement: HTMLVideoElement | null = null;
+let lastTimeUpdate = 0;
+let commentsIndex = 0;
 
-  constructor() {
-    this.container = document.createElement('div');
-    this.container.id = 'nico-comment-overlay';
-    this.canvas = document.createElement('canvas');
-    this.ctx = this.canvas.getContext('2d')!;
-    
-    this.setupStyles();
-    this.setupResize();
-    this.startAnimation();
-  }
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === "START_COMMENTS") {
+        comments = request.comments.sort((a: any, b: any) => a.vposMs - b.vposMs);
+        comments.forEach(c => c.shown = false);
+        commentsIndex = 0;
+        lastTimeUpdate = 0;
+        setupOverlay();
+        sendResponse({ status: "ok" });
+    }
+});
 
-  private setupStyles() {
-    this.container.style.position = 'absolute';
-    this.container.style.top = '0';
-    this.container.style.left = '0';
-    this.container.style.width = '100%';
-    this.container.style.height = '100%';
-    this.container.style.pointerEvents = 'none';
-    this.container.style.zIndex = '9999';
-    
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-    this.container.appendChild(this.canvas);
-    
-    // dアニメの動画プレイヤーコンテナを探す
-    const player = document.querySelector('.video-player-container') || document.body;
-    player.appendChild(this.container);
-    
-    this.resize();
-  }
+function setupOverlay() {
+    videoElement = document.querySelector('video');
+    if (!videoElement) return;
 
-  private setupResize() {
-    window.addEventListener('resize', () => this.resize());
-  }
+    if (!overlay) {
+        const container = videoElement.parentElement;
+        if (!container) return;
 
-  private resize() {
-    const rect = this.container.getBoundingClientRect();
-    this.canvas.width = rect.width;
-    this.canvas.height = rect.height;
-  }
+        overlay = document.createElement('div');
+        overlay.id = "nico-comment-overlay";
+        container.appendChild(overlay);
+        container.style.position = container.style.position || "relative";
 
-  public addComment(comment: NicoComment) {
-    this.ctx.font = 'bold 36px "FixedSys", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif';
-    const metrics = this.ctx.measureText(comment.text);
-    
-    this.activeComments.push({
-      comment,
-      x: this.canvas.width,
-      y: Math.random() * (this.canvas.height - 40) + 40,
-      width: metrics.width
-    });
-  }
+        videoElement.addEventListener('timeupdate', onTimeUpdate);
+        videoElement.addEventListener('seeked', onSeeked);
+        videoElement.addEventListener('play', () => {
+            overlay?.classList.remove('nico-overlay-paused');
+        });
+        videoElement.addEventListener('pause', () => {
+            overlay?.classList.add('nico-overlay-paused');
+        });
 
-  private startAnimation() {
-    const animate = () => {
-      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-      
-      this.activeComments = this.activeComments.filter(ac => {
-        ac.x -= 2; // 移動速度
-        
-        this.ctx.fillStyle = ac.comment.command.color || 'white';
-        this.ctx.strokeStyle = 'black';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeText(ac.comment.text, ac.x, ac.y);
-        this.ctx.fillText(ac.comment.text, ac.x, ac.y);
-        
-        return ac.x + ac.width > 0;
-      });
-      
-      requestAnimationFrame(animate);
-    };
-    animate();
-  }
+        const resizeObserver = new ResizeObserver(() => {
+            if (overlay && videoElement) {
+                overlay.style.width = videoElement.offsetWidth + "px";
+                overlay.style.height = videoElement.offsetHeight + "px";
+                overlay.style.left = (videoElement.offsetLeft) + "px";
+                overlay.style.top = (videoElement.offsetTop) + "px";
+            }
+        });
+        resizeObserver.observe(videoElement);
+        resizeObserver.observe(container);
+    }
 }
 
-const overlay = new CommentOverlay();
+function onSeeked() {
+    if (!videoElement) return;
+    const currentTime = videoElement.currentTime;
+    const currentVposMs = Math.floor(currentTime * 1000);
 
-// backgroundからのメッセージ待ち
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "NEW_COMMENTS") {
-    message.comments.forEach((c: NicoComment) => overlay.addComment(c));
-  }
-});
+    if (overlay) overlay.innerHTML = "";
+
+    comments.forEach(c => c.shown = false);
+    commentsIndex = comments.findIndex(c => c.vposMs >= currentVposMs);
+    if (commentsIndex === -1) commentsIndex = comments.length;
+    lastTimeUpdate = currentTime;
+}
+
+function onTimeUpdate() {
+    if (!videoElement || comments.length === 0) return;
+
+    const currentTime = videoElement.currentTime;
+    const currentVposMs = Math.floor(currentTime * 1000);
+
+    if (Math.abs(currentTime - lastTimeUpdate) > 1.0) {
+        onSeeked();
+        return;
+    }
+    lastTimeUpdate = currentTime;
+
+    while (commentsIndex < comments.length && comments[commentsIndex].vposMs <= currentVposMs) {
+        const c = comments[commentsIndex];
+        if (!c.shown) {
+            c.shown = true;
+            spawnComment(c);
+        }
+        commentsIndex++;
+    }
+}
+
+function spawnComment(comment: any) {
+    if (!overlay) return;
+
+    const el = document.createElement('div');
+    el.className = 'nico-comment';
+    el.textContent = comment.body;
+
+    const style: CommentStyle = parseCommentCommands(comment.commands);
+
+    el.style.color = style.color;
+    el.style.fontSize = style.size;
+    if (style.textShadow) {
+        el.style.textShadow = style.textShadow;
+    }
+
+    if (style.position === 'fixed-top') {
+        el.style.top = (Math.random() * 20) + "%";
+        el.classList.add("nico-fixed");
+    } else if (style.position === 'fixed-bottom') {
+        el.style.bottom = (Math.random() * 20) + "%";
+        el.classList.add("nico-fixed");
+    } else {
+        el.style.top = (Math.random() * 85) + "%";
+        el.classList.add("nico-scroll");
+    }
+
+    overlay.appendChild(el);
+
+    if (videoElement && videoElement.paused) {
+        overlay.classList.add('nico-overlay-paused');
+    }
+
+    el.addEventListener('animationend', () => {
+        el.remove();
+    });
+}
+
+function createControlPanel() {
+    if (document.getElementById('nico-ext-panel')) return;
+
+    const panel = document.createElement('div');
+    panel.id = 'nico-ext-panel';
+    panel.style.opacity = '0.3';
+    panel.innerHTML = `
+        <div style="font-size: 13px; margin-bottom: 8px; font-weight: bold;">ニコ動コメント読込</div>
+        <input type="text" id="nico-ext-input" placeholder="URL または sm..." style="width: 140px; padding: 4px; font-size: 12px;">
+        <button id="nico-ext-btn" style="padding: 4px 8px; font-size: 12px; cursor: pointer;">読込</button>
+        <div id="nico-ext-msg" style="font-size: 11px; margin-top: 5px; color: #ffeb3b; word-break: break-all;"></div>
+    `;
+
+    document.body.appendChild(panel);
+
+    const btn = document.getElementById('nico-ext-btn') as HTMLButtonElement;
+    const input = document.getElementById('nico-ext-input') as HTMLInputElement;
+    const msg = document.getElementById('nico-ext-msg') as HTMLDivElement;
+
+    btn.addEventListener('click', () => {
+        const val = input.value.trim();
+        const match = val.match(/(?:sm|so|nm)\d+/);
+        if (!match) {
+            msg.textContent = "無効なURL/ID";
+            return;
+        }
+        msg.textContent = "取得中...";
+        chrome.runtime.sendMessage({
+            type: "FETCH_AND_SEND",
+            videoId: match[0]
+        }, (res) => {
+            if (res && res.success) {
+                msg.textContent = "完了！右上のパネルから設定可能です。";
+                setTimeout(() => { panel.style.opacity = '0.3'; }, 3000);
+            } else {
+                msg.textContent = res ? res.error : "不明なエラー";
+                panel.style.opacity = '1';
+            }
+        });
+    });
+
+    panel.addEventListener('mouseenter', () => { panel.style.opacity = '1'; });
+    panel.addEventListener('mouseleave', () => { panel.style.opacity = '0.3'; });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', createControlPanel);
+} else {
+    createControlPanel();
+}

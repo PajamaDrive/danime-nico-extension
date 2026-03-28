@@ -1,51 +1,98 @@
-import { NicoComment, NicoSession, NicoThreadKey, parseCommand } from './core';
+import { extractThreadKey, extractThreadTargets } from './core';
 
-// dアニメストアのニコ実況コメントフェッチ
-async function fetchNicoComments(videoId: string, timestamp: number): Promise<NicoComment[]> {
-  // 1. スレッドキーの取得
-  const threadKey = await getThreadKey(videoId);
-  
-  // 2. コメントリクエストの送信
-  const comments = await getComments(threadKey, timestamp);
-  
-  return comments;
-}
-
-async function getThreadKey(videoId: string): Promise<NicoThreadKey> {
-  // ニコニコ実況のAPIを叩いてスレッドキーを取得するシミュレーション
-  return {
-    threadId: "jk" + videoId,
-    key: "dummy_key",
-    service: "jk1"
-  };
-}
-
-async function getComments(threadKey: NicoThreadKey, timestamp: number): Promise<NicoComment[]> {
-  // 本来はWebSocketやHTTPリクエストでコメントを取得
-  console.log(`Fetching comments for ${threadKey.threadId} at ${timestamp}`);
-  return [
-    {
-      id: "1",
-      text: "テストコメント1",
-      vpos: timestamp + 1000,
-      userId: "u1",
-      command: parseCommand("white normal")
-    },
-    {
-      id: "2",
-      text: "わこつ",
-      vpos: timestamp + 2500,
-      userId: "u2",
-      command: parseCommand("red big")
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === "FETCH_AND_SEND") {
+        fetchNicoComments(request.videoId).then(comments => {
+            if (!comments || comments.length === 0) {
+                sendResponse({success: false, error: "コメントが0件、または取得に失敗しました。"});
+                return;
+            }
+            
+            const tabId = request.tabId || (sender.tab ? sender.tab.id : undefined);
+            if (tabId) {
+                chrome.tabs.sendMessage(tabId, {
+                    type: "START_COMMENTS",
+                    comments: comments
+                }, (res) => {
+                    if (chrome.runtime.lastError) {
+                        sendResponse({success: false, error: "dアニメストアのページで拡張機能がロードされていません。タブをリロードして再試行してください。"});
+                    } else {
+                        sendResponse({success: true});
+                    }
+                });
+            } else {
+                sendResponse({success: false, error: "Tab ID undefined"});
+            }
+        }).catch(err => {
+            console.error("[NicoExt] fetchNicoComments error:", err);
+            sendResponse({success: false, error: err.message});
+        });
+        return true; 
     }
-  ];
+});
+
+async function fetchNicoComments(videoId: string) {
+    const watchUrl = `https://www.nicovideo.jp/watch/${videoId}`;
+    const pageRes = await fetch(watchUrl, {
+        headers: { 'Accept': 'text/html,application/xhtml+xml', 'Accept-Language': 'ja,en;q=0.9' },
+        credentials: 'include'
+    });
+
+    if (!pageRes.ok) throw new Error(`動画ページの取得に失敗しました: HTTP ${pageRes.status}`);
+
+    const html = await pageRes.text();
+    let threadKey: string;
+    let targets: {id: string, fork: string}[] = [];
+
+    try {
+        threadKey = extractThreadKey(html);
+        targets = extractThreadTargets(html);
+    } catch (e) {
+        return await fetchViaGuestApi(videoId, "");
+    }
+
+    if (targets.length === 0) {
+        return await fetchViaGuestApi(videoId, threadKey);
+    }
+
+    return await fetchComments(threadKey, targets);
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "FETCH_COMMENTS") {
-    fetchNicoComments(message.videoId, message.timestamp)
-      .then(comments => sendResponse({ comments }))
-      .catch(error => sendResponse({ error: error.message }));
-    return true; // async response
-  }
-});
+async function fetchViaGuestApi(videoId: string, fallbackKey: string) {
+    const res = await fetch(
+        `https://www.nicovideo.jp/api/watch/v3_guest/${videoId}?_frontendId=6&_frontendVersion=0`,
+        { headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }, credentials: 'include' }
+    );
+    if (!res.ok) throw new Error(`ゲストAPIも失敗しました: HTTP ${res.status}`);
+    const data = await res.json();
+    const nvComment = data?.data?.comment?.nvComment;
+    if (!nvComment) throw new Error("ゲストAPIからもコメント情報を取得できませんでした。");
+    const key = nvComment.threadKey || fallbackKey;
+    const tgts = (nvComment.threads || []).map((t: any) => ({ id: String(t.id), fork: t.fork }));
+    return await fetchComments(key, tgts);
+}
+
+async function fetchComments(threadKey: string, targets: {id: string, fork: string}[]) {
+    const commentRes = await fetch('https://public.nvcomment.nicovideo.jp/v1/threads?pc=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' },
+        body: JSON.stringify({ params: { targets, language: 'ja-jp' }, threadKey, additionals: {} })
+    });
+
+    if (!commentRes.ok) throw new Error(`コメントサーバーからの取得に失敗: HTTP ${commentRes.status}`);
+    const commentData = await commentRes.json();
+    const comments: any[] = [];
+
+    (commentData?.data?.threads || []).forEach((thread: any) => {
+        (thread.comments || []).forEach((c: any) => {
+            comments.push({
+                vposMs: c.vposMs != null ? c.vposMs : (c.vpos != null ? c.vpos * 10 : 0),
+                body: c.body,
+                commands: c.commands || []
+            });
+        });
+    });
+
+    comments.sort((a, b) => a.vposMs - b.vposMs);
+    return comments;
+}
