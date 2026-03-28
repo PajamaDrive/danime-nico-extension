@@ -1,4 +1,12 @@
-import { parseCommentCommands, CommentStyle, NicoComment, extractVideoId } from './core';
+import {
+  parseCommentCommands,
+  CommentStyle,
+  NicoComment,
+  extractVideoId,
+  findCommentIndexForTime,
+  getCommentsToBeShown,
+  calculateCommentPosition,
+} from './core';
 
 let comments: NicoComment[] = [];
 let overlay: HTMLElement | null = null;
@@ -60,8 +68,7 @@ function onSeeked() {
   if (overlay) overlay.innerHTML = '';
 
   comments.forEach((c) => (c.shown = false));
-  commentsIndex = comments.findIndex((c) => c.vposMs >= currentVposMs);
-  if (commentsIndex === -1) commentsIndex = comments.length;
+  commentsIndex = findCommentIndexForTime(comments, currentVposMs);
   lastTimeUpdate = currentTime;
 }
 
@@ -77,14 +84,16 @@ function onTimeUpdate() {
   }
   lastTimeUpdate = currentTime;
 
-  while (commentsIndex < comments.length && comments[commentsIndex].vposMs <= currentVposMs) {
-    const c = comments[commentsIndex];
-    if (!c.shown) {
-      c.shown = true;
-      spawnComment(c);
-    }
-    commentsIndex++;
-  }
+  const { commentsToShow, nextIndex } = getCommentsToBeShown(
+    comments,
+    commentsIndex,
+    currentVposMs,
+  );
+  commentsToShow.forEach((c) => {
+    c.shown = true;
+    spawnComment(c);
+  });
+  commentsIndex = nextIndex;
 }
 
 function spawnComment(comment: NicoComment) {
@@ -102,16 +111,10 @@ function spawnComment(comment: NicoComment) {
     el.style.textShadow = style.textShadow;
   }
 
-  if (style.position === 'fixed-top') {
-    el.style.top = Math.random() * 20 + '%';
-    el.classList.add('nico-fixed');
-  } else if (style.position === 'fixed-bottom') {
-    el.style.bottom = Math.random() * 20 + '%';
-    el.classList.add('nico-fixed');
-  } else {
-    el.style.top = Math.random() * 85 + '%';
-    el.classList.add('nico-scroll');
-  }
+  const pos: any = calculateCommentPosition(style, Math.random());
+  if (pos.top) el.style.top = pos.top;
+  if (pos.bottom) el.style.bottom = pos.bottom;
+  el.classList.add(pos.className);
 
   overlay.appendChild(el);
 
