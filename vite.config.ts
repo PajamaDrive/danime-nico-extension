@@ -28,6 +28,8 @@ export default defineConfig({
     environment: 'happy-dom',
     coverage: {
       enabled: true,
+      include: ['src/**/*.ts'],
+      exclude: ['src/background.ts', 'src/content.ts', 'src/popup.ts'],
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
