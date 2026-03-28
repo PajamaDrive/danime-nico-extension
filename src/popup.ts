@@ -1,16 +1,16 @@
+import { extractVideoId } from './core';
+
 document.getElementById('load-btn')?.addEventListener('click', () => {
   const input = (document.getElementById('nico-url') as HTMLInputElement).value.trim();
   const status = document.getElementById('status') as HTMLParagraphElement;
   const loadBtn = document.getElementById('load-btn') as HTMLButtonElement;
 
-  const match = input.match(/(?:sm|so|nm)\d+/);
-  if (!match) {
+  const videoId = extractVideoId(input);
+  if (!videoId) {
     status.textContent = '無効なURLまたはIDです (例: sm1234567)。';
     status.style.color = 'red';
     return;
   }
-
-  const videoId = match[0];
   status.textContent = 'コメント取得中...';
   status.style.color = 'black';
   loadBtn.disabled = true;

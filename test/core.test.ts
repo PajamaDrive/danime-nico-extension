@@ -1,5 +1,14 @@
 import { expect, it, describe } from 'vitest';
-import { extractThreadKey, extractThreadTargets, parseCommentCommands } from '../src/core';
+import {
+  extractThreadKey,
+  extractThreadTargets,
+  parseCommentCommands,
+  extractVideoId,
+  parseNicoCommentResponse,
+  findCommentIndexForTime,
+  getCommentsToBeShown,
+  calculateCommentPosition,
+} from '../src/core';
 
 describe('core', () => {
   describe('extractThreadKey', () => {
@@ -32,6 +41,110 @@ describe('core', () => {
       const targets = extractThreadTargets(html);
       expect(targets).toHaveLength(3); // owner, main, easy
       expect(targets.map((t) => t.id)).toEqual(['98765', '98765', '98765']);
+    });
+  });
+
+  describe('extractVideoId', () => {
+    it('URLから動画IDを抽出できること', () => {
+      expect(extractVideoId('https://www.nicovideo.jp/watch/sm12345')).toBe('sm12345');
+      expect(extractVideoId('sm12345')).toBe('sm12345');
+      expect(extractVideoId('so67890')).toBe('so67890');
+    });
+
+    it('無効な入力に対して null を返すこと', () => {
+      expect(extractVideoId('https://google.com')).toBeNull();
+      expect(extractVideoId('12345')).toBeNull();
+    });
+  });
+
+  describe('parseNicoCommentResponse', () => {
+    it('コメントサーバーのレスポンスを正しくパースしてソートすること', () => {
+      const mockData = {
+        data: {
+          threads: [
+            {
+              comments: [
+                { vposMs: 2000, body: 'later comment' },
+                { vposMs: 1000, body: 'early comment', commands: ['red'] },
+              ],
+            },
+          ],
+        },
+      };
+      const comments = parseNicoCommentResponse(mockData);
+      expect(comments).toHaveLength(2);
+      expect(comments[0].body).toBe('early comment');
+      expect(comments[0].commands).toEqual(['red']);
+      expect(comments[1].body).toBe('later comment');
+    });
+
+    it('vposMs がない場合は vpos から変換すること', () => {
+      const mockData = {
+        data: {
+          threads: [{ comments: [{ vpos: 100, body: 'old style' }] }],
+        },
+      };
+      const comments = parseNicoCommentResponse(mockData);
+      expect(comments[0].vposMs).toBe(1000);
+    });
+  });
+
+  describe('findCommentIndexForTime', () => {
+    const comments = [
+      { vposMs: 1000, body: 'a', commands: [] },
+      { vposMs: 2000, body: 'b', commands: [] },
+      { vposMs: 3000, body: 'c', commands: [] },
+    ];
+
+    it('指定した時刻以上の最初のコメントインデックスを返すこと', () => {
+      expect(findCommentIndexForTime(comments, 1500)).toBe(1);
+      expect(findCommentIndexForTime(comments, 2000)).toBe(1);
+    });
+
+    it('該当がない場合は配列の長さを返すこと', () => {
+      expect(findCommentIndexForTime(comments, 4000)).toBe(3);
+    });
+  });
+
+  describe('getCommentsToBeShown', () => {
+    it('現在時刻（currentVposMs）までの未表示コメントを抽出し、インデックスを進めること', () => {
+      const comments = [
+        { vposMs: 1000, body: 'a', commands: [], shown: false },
+        { vposMs: 1500, body: 'b', commands: [], shown: false },
+        { vposMs: 2000, body: 'c', commands: [], shown: false },
+      ];
+      const result = getCommentsToBeShown(comments, 0, 1600);
+      expect(result.commentsToShow).toHaveLength(2);
+      expect(result.commentsToShow[0].body).toBe('a');
+      expect(result.commentsToShow[1].body).toBe('b');
+      expect(result.nextIndex).toBe(2);
+    });
+
+    it('既に shown になっているコメントは抽出しないこと', () => {
+      const comments = [{ vposMs: 1000, body: 'a', commands: [], shown: true }];
+      const result = getCommentsToBeShown(comments, 0, 1500);
+      expect(result.commentsToShow).toHaveLength(0);
+      expect(result.nextIndex).toBe(1);
+    });
+  });
+
+  describe('calculateCommentPosition', () => {
+    it('fixed-top の位置を計算すること', () => {
+      const pos = calculateCommentPosition({ position: 'fixed-top' } as any, 0.5);
+      expect(pos.top).toBe('10%');
+      expect(pos.className).toBe('nico-fixed');
+    });
+
+    it('fixed-bottom の位置を計算すること', () => {
+      const pos = calculateCommentPosition({ position: 'fixed-bottom' } as any, 0.5);
+      expect(pos.bottom).toBe('10%');
+      expect(pos.className).toBe('nico-fixed');
+    });
+
+    it('scroll の位置を計算すること', () => {
+      const pos = calculateCommentPosition({ position: 'scroll' } as any, 0.5);
+      expect(pos.top).toBe('42.5%');
+      expect(pos.className).toBe('nico-scroll');
     });
   });
 

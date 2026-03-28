@@ -44,11 +44,96 @@ export function extractThreadTargets(html: string): ThreadTarget[] {
   return targets;
 }
 
+export function extractVideoId(input: string): string | null {
+  const match = input.match(/(?:sm|so|nm)\d+/);
+  return match ? match[0] : null;
+}
+
+export function parseNicoCommentResponse(commentData: {
+  data?: {
+    threads?: {
+      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
+    }[];
+  };
+}): NicoComment[] {
+  const comments: NicoComment[] = [];
+
+  (commentData?.data?.threads || []).forEach(
+    (thread: {
+      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
+    }) => {
+      (thread.comments || []).forEach(
+        (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
+          comments.push({
+            vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
+            body: c.body,
+            commands: c.commands || [],
+          });
+        },
+      );
+    },
+  );
+
+  return comments.sort((a, b) => a.vposMs - b.vposMs);
+}
+
 export interface CommentStyle {
   color: string;
   size: string;
   textShadow: string | null;
   position: 'fixed-top' | 'fixed-bottom' | 'scroll';
+}
+
+export function findCommentIndexForTime(comments: NicoComment[], currentVposMs: number): number {
+  const index = comments.findIndex((c) => c.vposMs >= currentVposMs);
+  return index === -1 ? comments.length : index;
+}
+
+export function getCommentsToBeShown(
+  comments: NicoComment[],
+  currentIndex: number,
+  currentVposMs: number,
+): { commentsToShow: NicoComment[]; nextIndex: number } {
+  const commentsToShow: NicoComment[] = [];
+  let nextIndex = currentIndex;
+
+  while (nextIndex < comments.length && comments[nextIndex].vposMs <= currentVposMs) {
+    const c = comments[nextIndex];
+    if (!c.shown) {
+      commentsToShow.push(c);
+    }
+    nextIndex++;
+  }
+
+  return { commentsToShow, nextIndex };
+}
+
+export interface CommentPositionStyle {
+  top?: string;
+  bottom?: string;
+  className: 'nico-fixed' | 'nico-scroll';
+}
+
+export function calculateCommentPosition(
+  style: CommentStyle,
+  randomSeed: number, // 0.0 to 1.0 (replacement for Math.random())
+): CommentPositionStyle {
+  if (style.position === 'fixed-top') {
+    return {
+      top: randomSeed * 20 + '%',
+      className: 'nico-fixed',
+    };
+  } else if (style.position === 'fixed-bottom') {
+    return {
+      bottom: randomSeed * 20 + '%',
+      className: 'nico-fixed',
+    };
+  } else {
+    return {
+      top: randomSeed * 85 + '%',
+      className: 'nico-scroll',
+    };
+  }
 }
 
 export function parseCommentCommands(commands: string[]): CommentStyle {

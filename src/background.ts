@@ -1,4 +1,9 @@
-import { extractThreadKey, extractThreadTargets, NicoComment, ThreadTarget } from './core';
+import {
+  extractThreadKey,
+  extractThreadTargets,
+  ThreadTarget,
+  parseNicoCommentResponse,
+} from './core';
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'FETCH_AND_SEND') {
@@ -101,24 +106,5 @@ async function fetchComments(threadKey: string, targets: ThreadTarget[]) {
   if (!commentRes.ok)
     throw new Error(`コメントサーバーからの取得に失敗: HTTP ${commentRes.status}`);
   const commentData = await commentRes.json();
-  const comments: NicoComment[] = [];
-
-  (commentData?.data?.threads || []).forEach(
-    (thread: {
-      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
-    }) => {
-      (thread.comments || []).forEach(
-        (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
-          comments.push({
-            vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
-            body: c.body,
-            commands: c.commands || [],
-          });
-        },
-      );
-    },
-  );
-
-  comments.sort((a, b) => a.vposMs - b.vposMs);
-  return comments;
+  return parseNicoCommentResponse(commentData);
 }
