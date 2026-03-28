@@ -1,32 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "dアニメストア ニコニコ実況風コメントリプレイ",
-  "version": "1.0.0",
-  "description": "dアニメストアの動画再生画面に、ニコニコ実況の過去ログコメントを重ねて表示します。",
-  "permissions": ["storage", "declarativeNetRequest"],
+  "name": "dアニメ ニコ動コメント拡張",
+  "version": "1.0",
+  "description": "dアニメストアでニコニコ動画のコメントを流す拡張機能",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
   "host_permissions": [
     "https://animestore.docomo.ne.jp/*",
-    "https://jk.nicovideo.jp/*"
+    "https://*.nicovideo.jp/*",
+    "https://public.nvcomment.nicovideo.jp/*",
+    "https://nvapi.nicovideo.jp/*"
   ],
   "action": {
-    "default_popup": "popup.html"
-  },
-  "background": {
-    "service_worker": "dist/background.js",
-    "type": "module"
+    "default_popup": "dist/popup.html"
   },
   "content_scripts": [
     {
-      "matches": ["https://animestore.docomo.ne.jp/animestore/sc_d_pc*"],
-      "js": ["dist/content.js"],
-      "css": ["styles.css"],
+      "matches": [
+        "*://animestore.docomo.ne.jp/animestore/sc_d_pc*"
+      ],
+      "js": [
+        "dist/content.js"
+      ],
+      "css": [
+        "styles.css"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["styles.css"],
-      "matches": ["https://animestore.docomo.ne.jp/*"]
-    }
-  ]
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  }
 }
