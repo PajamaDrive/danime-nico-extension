@@ -3,6 +3,13 @@ export interface ThreadTarget {
   fork: 'owner' | 'main' | 'easy' | string;
 }
 
+export interface NicoComment {
+  body: string;
+  vposMs: number;
+  commands: string[];
+  shown?: boolean;
+}
+
 export function extractThreadKey(html: string): string {
   const threadKeyRegex =
     /&quot;threadKey&quot;:&quot;(eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+)&quot;/;

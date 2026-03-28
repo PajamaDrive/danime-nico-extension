@@ -1,6 +1,6 @@
-import { parseCommentCommands, CommentStyle } from './core';
+import { parseCommentCommands, CommentStyle, NicoComment } from './core';
 
-let comments: any[] = [];
+let comments: NicoComment[] = [];
 let overlay: HTMLElement | null = null;
 let videoElement: HTMLVideoElement | null = null;
 let lastTimeUpdate = 0;
@@ -8,7 +8,7 @@ let commentsIndex = 0;
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'START_COMMENTS') {
-    comments = request.comments.sort((a: any, b: any) => a.vposMs - b.vposMs);
+    comments = request.comments.sort((a: NicoComment, b: NicoComment) => a.vposMs - b.vposMs);
     comments.forEach((c) => (c.shown = false));
     commentsIndex = 0;
     lastTimeUpdate = 0;
@@ -87,7 +87,7 @@ function onTimeUpdate() {
   }
 }
 
-function spawnComment(comment: any) {
+function spawnComment(comment: NicoComment) {
   if (!overlay) return;
 
   const el = document.createElement('div');

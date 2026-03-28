@@ -1,4 +1,4 @@
-import { extractThreadKey, extractThreadTargets } from './core';
+import { extractThreadKey, extractThreadTargets, NicoComment, ThreadTarget } from './core';
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'FETCH_AND_SEND') {
@@ -17,7 +17,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               type: 'START_COMMENTS',
               comments: comments,
             },
-            (res) => {
+            (_res) => {
               if (chrome.runtime.lastError) {
                 sendResponse({
                   success: false,
@@ -52,12 +52,12 @@ async function fetchNicoComments(videoId: string) {
 
   const html = await pageRes.text();
   let threadKey: string;
-  let targets: { id: string; fork: string }[] = [];
+  let targets: ThreadTarget[];
 
   try {
     threadKey = extractThreadKey(html);
     targets = extractThreadTargets(html);
-  } catch (e) {
+  } catch (_e) {
     return await fetchViaGuestApi(videoId, '');
   }
 
@@ -78,11 +78,16 @@ async function fetchViaGuestApi(videoId: string, fallbackKey: string) {
   const nvComment = data?.data?.comment?.nvComment;
   if (!nvComment) throw new Error('ゲストAPIからもコメント情報を取得できませんでした。');
   const key = nvComment.threadKey || fallbackKey;
-  const tgts = (nvComment.threads || []).map((t: any) => ({ id: String(t.id), fork: t.fork }));
+  const tgts: ThreadTarget[] = (nvComment.threads || []).map(
+    (t: { id: string | number; fork: string }) => ({
+      id: String(t.id),
+      fork: t.fork,
+    }),
+  );
   return await fetchComments(key, tgts);
 }
 
-async function fetchComments(threadKey: string, targets: { id: string; fork: string }[]) {
+async function fetchComments(threadKey: string, targets: ThreadTarget[]) {
   const commentRes = await fetch('https://public.nvcomment.nicovideo.jp/v1/threads?pc=1', {
     method: 'POST',
     headers: {
@@ -96,16 +101,18 @@ async function fetchComments(threadKey: string, targets: { id: string; fork: str
   if (!commentRes.ok)
     throw new Error(`コメントサーバーからの取得に失敗: HTTP ${commentRes.status}`);
   const commentData = await commentRes.json();
-  const comments: any[] = [];
+  const comments: NicoComment[] = [];
 
-  (commentData?.data?.threads || []).forEach((thread: any) => {
-    (thread.comments || []).forEach((c: any) => {
-      comments.push({
-        vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
-        body: c.body,
-        commands: c.commands || [],
-      });
-    });
+  (commentData?.data?.threads || []).forEach((thread: { comments?: any[] }) => {
+    (thread.comments || []).forEach(
+      (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
+        comments.push({
+          vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
+          body: c.body,
+          commands: c.commands || [],
+        });
+      },
+    );
   });
 
   comments.sort((a, b) => a.vposMs - b.vposMs);
