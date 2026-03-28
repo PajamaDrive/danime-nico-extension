@@ -103,17 +103,21 @@ async function fetchComments(threadKey: string, targets: ThreadTarget[]) {
   const commentData = await commentRes.json();
   const comments: NicoComment[] = [];
 
-  (commentData?.data?.threads || []).forEach((thread: { comments?: any[] }) => {
-    (thread.comments || []).forEach(
-      (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
-        comments.push({
-          vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
-          body: c.body,
-          commands: c.commands || [],
-        });
-      },
-    );
-  });
+  (commentData?.data?.threads || []).forEach(
+    (thread: {
+      comments?: { vposMs?: number; vpos?: number; body: string; commands?: string[] }[];
+    }) => {
+      (thread.comments || []).forEach(
+        (c: { vposMs?: number; vpos?: number; body: string; commands?: string[] }) => {
+          comments.push({
+            vposMs: c.vposMs != null ? c.vposMs : c.vpos != null ? c.vpos * 10 : 0,
+            body: c.body,
+            commands: c.commands || [],
+          });
+        },
+      );
+    },
+  );
 
   comments.sort((a, b) => a.vposMs - b.vposMs);
   return comments;
